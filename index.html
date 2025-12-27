@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZOMBIE OUTBREAK HUD</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-green: #0f0;
+            --dark-green: #050;
+            --alert-red: #ff0000;
+            --bg-color: #000;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--neon-green);
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* CRT Scanline Effect */
+        .scanlines::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: -45%;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 50;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* Glitch Animation */
+        @keyframes glitch-anim {
+            0% {
+                transform: translate(0)
+            }
+
+            20% {
+                transform: translate(-2px, 2px)
+            }
+
+            40% {
+                transform: translate(-2px, -2px)
+            }
+
+            60% {
+                transform: translate(2px, 2px)
+            }
+
+            80% {
+                transform: translate(2px, -2px)
+            }
+
+            100% {
+                transform: translate(0)
+            }
+        }
+
+        .glitch-active {
+            animation: glitch-anim 0.3s infinite;
+            color: var(--alert-red) !important;
+            text-shadow: 2px 2px var(--neon-green);
+        }
+
+        /* Vignettes */
+        .vignette-stable {
+            background: radial-gradient(circle, transparent 60%, rgba(0, 50, 0, 0.2));
+        }
+
+        .vignette-infected {
+            background: radial-gradient(circle, transparent 40%, rgba(0, 100, 0, 0.6));
+            animation: pulse-green 2s infinite;
+        }
+
+        .vignette-critical {
+            background: radial-gradient(circle, transparent 20%, rgba(100, 0, 0, 0.5));
+            animation: pulse-red 0.5s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                box-shadow: inset 0 0 20px rgba(100, 0, 0, 0.5);
+            }
+
+            50% {
+                box-shadow: inset 0 0 50px rgba(150, 0, 0, 0.8);
+            }
+
+            100% {
+                box-shadow: inset 0 0 20px rgba(100, 0, 0, 0.5);
+            }
+        }
+
+        @keyframes pulse-green {
+            0% {
+                box-shadow: inset 0 0 20px rgba(0, 50, 0, 0.3);
+            }
+
+            50% {
+                box-shadow: inset 0 0 40px rgba(0, 80, 0, 0.5);
+            }
+
+            100% {
+                box-shadow: inset 0 0 20px rgba(0, 50, 0, 0.3);
+            }
+        }
+
+
+        .hud-border {
+            border: 1px solid var(--neon-green);
+            box-shadow: 0 0 10px var(--neon-green);
+        }
+
+        .progress-bar-fill {
+            transition: width 0.5s ease;
+        }
+
+        /* Utility */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Camera Feed Layer */
+        #camera-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 10;
+            filter: grayscale(100%) contrast(1.2);
+            transform: scaleX(-1);
+            /* Mirror */
+        }
+
+        #ui-layer {
+            position: relative;
+            z-index: 20;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .btn-action {
+            background: rgba(0, 20, 0, 0.8);
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            text-shadow: 0 0 5px var(--neon-green);
+        }
+
+        .btn-action:active {
+            background: var(--neon-green);
+            color: black;
+        }
+
+        .btn-disabled {
+            opacity: 0.3;
+            pointer-events: none;
+            border-color: #555;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body class="scanlines bg-black text-green-500 overflow-hidden">
+
+    <!-- VIDEO LAYER (Hidden until End Game) -->
+    <video id="camera-video" class="hidden" autoplay playsinline muted></video>
+
+    <!-- START SCREEN -->
+    <div id="start-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black">
+        <h1 class="text-4xl md:text-6xl mb-4 font-bold tracking-widest text-center animate-pulse"
+            style="text-shadow: 0 0 10px #0f0;">殭屍末日生存系統</h1>
+        <div class="border border-green-500 p-4 max-w-sm text-center mb-8 bg-green-900/20 rounded">
+            <p class="mb-2 text-xl font-bold text-red-500">警告：偵測到病毒爆發</p>
+            <p class="text-sm opacity-80 mb-4">你已經暴露在病毒環境中。使用實驗性血清來延緩感染。活著直到撤離點開啟。</p>
+            <p class="text-xs text-red-500 font-bold border-t border-red-900 pt-2">請允許相機與麥克風權限以進行生存判定</p>
+        </div>
+        <div class="flex gap-4">
+            <button onclick="startGame(20)"
+                class="px-6 py-3 bg-green-800 text-green-100 border border-green-500 font-bold text-lg rounded hover:bg-green-600 shadow-[0_0_10px_rgba(0,255,0,0.3)] tracking-wider transition-all">
+                20 分鐘
+            </button>
+            <button onclick="startGame(30)"
+                class="px-6 py-3 bg-green-600 text-black font-bold text-xl rounded hover:bg-green-500 shadow-[0_0_15px_rgba(0,255,0,0.5)] tracking-wider transition-all scale-110">
+                30 分鐘
+            </button>
+            <button onclick="startGame(60)"
+                class="px-6 py-3 bg-green-800 text-green-100 border border-green-500 font-bold text-lg rounded hover:bg-green-600 shadow-[0_0_10px_rgba(0,255,0,0.3)] tracking-wider transition-all">
+                60 分鐘
+            </button>
+        </div>
+        <div class="mt-8 opacity-50 hover:opacity-100 transition-opacity flex flex-col items-center gap-2">
+            <a href="?fast" class="text-xs text-red-500 underline tracking-widest">[啟動快速檢測模式 / FAST MODE]</a>
+            <button onclick="startGame(0.5)"
+                class="text-xs text-yellow-500 underline tracking-widest bg-transparent border-none cursor-pointer">[最後30秒倒數測試
+                / COUNTDOWN TEST]</button>
+        </div>
+    </div>
+
+    <!-- MAIN UI LAYER (3-Column Grid Layout) -->
+    <div id="main-ui" class="hidden h-full p-4 relative z-30 pointer-events-none grid grid-cols-3 gap-4">
+
+        <!-- Vignette Overlay (Global) -->
+        <div id="vignette-overlay" class="absolute inset-0 z-0 pointer-events-none vignette-stable"></div>
+
+        <!-- COLUMN 1: ZOMBIE VIEW (Left) -->
+        <div id="col-zombie"
+            class="relative z-10 border border-green-500/30 bg-green-900/10 rounded overflow-hidden pointer-events-auto flex items-end justify-center">
+            <div class="absolute top-2 left-2 text-xs text-green-500 opacity-50 tracking-widest">THREAT VISUAL (CAM-1)
+            </div>
+            <!-- Zombie Layer (Restricted to this column) -->
+            <div id="zombie-layer" class="w-full h-full relative overflow-hidden">
+                <!-- Zombies injected here -->
+            </div>
+        </div>
+
+        <!-- COLUMN 2: DATA CORE (Center) -->
+        <div id="col-data" class="relative z-10 flex flex-col justify-center items-center pointer-events-auto">
+
+            <!-- INFECTION METER -->
+            <div
+                class="w-full bg-black/80 p-4 mb-8 border border-green-500/50 rounded shadow-[0_0_15px_rgba(0,100,0,0.3)]">
+                <div class="flex justify-between text-xs mb-2 uppercase tracking-widest text-green-400">
+                    <span>感染指數 (Infection Level)</span>
+                    <span id="infection-text">0%</span>
+                </div>
+                <div class="w-full h-6 bg-gray-900 border border-green-900 relative rounded overflow-hidden">
+                    <div id="infection-bar" class="h-full bg-green-600 progress-bar-fill" style="width: 0%"></div>
+                    <!-- Striped background -->
+                    <div class="absolute inset-0 opacity-20"
+                        style="background: repeating-linear-gradient(45deg, transparent, transparent 5px, #000 5px, #000 10px);">
+                    </div>
+                </div>
+                <div id="status-readout" class="text-center text-sm mt-2 text-green-400 font-bold tracking-widest">
+                    狀態：穩定 (STABLE)</div>
+            </div>
+
+            <!-- TIMER -->
+            <div
+                class="flex flex-col items-center justify-center p-8 border border-green-500/20 bg-black/40 rounded-full aspect-square w-full max-w-md shadow-[0_0_20px_rgba(0,255,0,0.1)]">
+                <div class="text-sm md:text-base uppercase opacity-70 mb-2 tracking-[0.5em] text-green-300">撤離倒數</div>
+                <div id="timer-display"
+                    class="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tighter text-green-500 font-mono"
+                    style="text-shadow: 0 0 20px rgba(0,255,0,0.6);">
+                    30:00
+                </div>
+                <div class="text-xs text-green-700 mt-2 tracking-widest">EXTRACTION PROTOCOL ACTIVE</div>
+            </div>
+            <!-- Time Bar -->
+            <div class="w-full max-w-md mt-4 h-2 bg-gray-900 border border-green-900 rounded overflow-hidden">
+                <div id="time-bar" class="h-full bg-green-500 progress-bar-fill" style="width: 100%"></div>
+            </div>
+
+        </div>
+
+        <!-- COLUMN 3: CONTROL PANEL (Right) -->
+        <div id="col-control" class="relative z-10 flex flex-col justify-center gap-4 pointer-events-auto pl-4">
+            <div class="text-xs uppercase opacity-50 text-right mb-2 tracking-widest border-b border-green-500/30 pb-1">
+                Counter-Measures</div>
+
+            <button id="btn-task-1"
+                class="btn-action w-full py-6 px-4 flex flex-col items-start rounded group hover:bg-green-900/30 transition-all border-l-4 border-green-600">
+                <div class="flex justify-between w-full mb-1">
+                    <span class="text-xl font-bold tracking-wider">服裝儀容</span>
+                    <span
+                        class="text-xs border border-green-500/50 px-2 py-1 rounded bg-black/50 text-green-300">-15%</span>
+                </div>
+                <span class="text-sm opacity-60 text-green-400">行動：檢查儀容</span>
+            </button>
+
+            <button id="btn-task-2"
+                class="btn-action w-full py-6 px-4 flex flex-col items-start rounded group hover:bg-green-900/30 transition-all border-l-4 border-green-600">
+                <div class="flex justify-between w-full mb-1">
+                    <span class="text-xl font-bold tracking-wider">能量汲取</span>
+                    <span
+                        class="text-xs border border-green-500/50 px-2 py-1 rounded bg-black/50 text-green-300">-15%</span>
+                </div>
+                <span class="text-sm opacity-60 text-green-400">行動：補充能量</span>
+            </button>
+
+            <button id="btn-task-3"
+                class="btn-action w-full py-8 px-4 flex flex-col items-start rounded group hover:bg-green-900/30 transition-all border border-green-400 shadow-[0_0_10px_#0f0] mt-4 relative overflow-hidden">
+                <div class="absolute inset-0 bg-green-500/10 animate-pulse"></div>
+                <div class="relative z-10 flex justify-between w-full items-center">
+                    <div class="flex flex-col">
+                        <span class="text-2xl font-bold tracking-wider text-green-100">檢查裝備</span>
+                        <span class="text-sm opacity-80 text-white">行動：確認裝備</span>
+                    </div>
+                    <span
+                        class="text-sm bg-green-600 text-black px-3 py-1 rounded font-bold uppercase tracking-wide">逃脫</span>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME OVER / WIN SCREEN -->
+    <div id="end-screen"
+        class="hidden fixed inset-0 z-40 flex flex-col items-center justify-center pointer-events-none">
+        <h1 id="end-title" class="text-7xl md:text-9xl font-bold text-red-600 tracking-widest animate-pulse text-center"
+            style="text-shadow: 2px 2px 0 #000, -1px -1px 0 #000;">你已屍變</h1>
+        <p id="end-subtitle" class="text-xl text-white bg-black/50 px-4 py-2 mt-4">感染指數危急</p>
+    </div>
+
+    <style>
+        /* Zombie Sway Animation */
+        @keyframes sway {
+            0% {
+                transform: rotate(-2deg) translateY(0);
+            }
+
+            50% {
+                transform: rotate(2deg) translateY(-5px);
+            }
+
+            100% {
+                transform: rotate(-2deg) translateY(0);
+            }
+        }
+
+        .zombie-anim {
+            transform-origin: bottom center;
+            animation: sway 4s infinite ease-in-out;
+        }
+
+        /* Delayed animations for variety */
+        .zombie-anim-1 {
+            animation-delay: 0s;
+        }
+
+        .zombie-anim-2 {
+            animation-delay: 1.5s;
+        }
+
+        .zombie-anim-3 {
+            animation-delay: 0.7s;
+        }
+    </style>
+
+    <script src="zombie_data.js"></script>
+    <script>
+        // --- GAME CONFIG ---
+        let GAME_DURATION_SEC = 1800;
+        const TASK_CURE_AMOUNT = 15;
+
+        // --- STATE ---
+        let state = {
+            timeLeft: GAME_DURATION_SEC,
+            infection: 0,
+            isRunning: false,
+            tasksDone: [false, false]
+        };
+        let gameInterval = null;
+        let audioCtx;
+
+        // --- DOM ELEMENTS ---
+        const els = {
+            startScreen: document.getElementById('start-screen'),
+            mainUi: document.getElementById('main-ui'),
+            btnStart: document.getElementById('btn-start'),
+            timer: document.getElementById('timer-display'),
+            infectionBar: document.getElementById('infection-bar'),
+            infectionText: document.getElementById('infection-text'),
+            statusText: document.getElementById('status-readout'),
+            vignette: document.getElementById('vignette-overlay'),
+            cameraVideo: document.getElementById('camera-video'),
+            endScreen: document.getElementById('end-screen'),
+            endTitle: document.getElementById('end-title'),
+            endSubtitle: document.getElementById('end-subtitle'),
+            btnTask1: document.getElementById('btn-task-1'),
+            btnTask2: document.getElementById('btn-task-2'),
+            btnTask3: document.getElementById('btn-task-3'),
+            body: document.body,
+            endTitle: document.getElementById('end-title'),
+            endSubtitle: document.getElementById('end-subtitle'),
+            btnTask1: document.getElementById('btn-task-1'),
+            btnTask2: document.getElementById('btn-task-2'),
+            btnTask3: document.getElementById('btn-task-3'),
+            body: document.body,
+            zombieLayer: document.getElementById('zombie-layer'),
+            timeBar: document.getElementById('time-bar')
+        };
+
+        // --- ZOMBIE GENERATOR ---
+        // Helper to inject styles/filters once
+        if (!document.getElementById('horror-filters')) {
+            const svgFilters = `
+            <svg style="position: absolute; width: 0; height: 0; overflow: hidden;" version="1.1" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <filter id="horror-noise">
+                        <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="5" result="noise" />
+                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" />
+                    </filter>
+                </defs>
+            </svg>`;
+            document.body.insertAdjacentHTML('afterbegin', svgFilters);
+
+            const style = document.createElement('style');
+            style.id = 'horror-filters';
+            style.textContent = `
+                .horror-filter { filter: url('#horror-noise') drop-shadow(0 0 5px rgba(0,255,0,0.3)); }
+                @keyframes shamble {
+                    0% { transform: rotate(-2deg) translateY(0); }
+                    50% { transform: rotate(2deg) translateY(-5px); }
+                    100% { transform: rotate(-2deg) translateY(0); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // Store initial button state for reset
+        let initialBtnStates = {};
+        window.addEventListener('DOMContentLoaded', () => {
+            if (els.btnTask1) initialBtnStates.btn1 = els.btnTask1.innerHTML;
+            if (els.btnTask2) initialBtnStates.btn2 = els.btnTask2.innerHTML;
+        });
+
+        // Base64 Video Source (Paste your string here)
+        // This is a placeholder RED SQUARE video. Replace with your zombie video string.
+
+        const VoiceAlerts = {
+            triggered: { min50: false, min40: false, min30: false, min20: false, min10: false, min2: false, min15s: false },
+            lastIntTime: -1,
+
+            reset() {
+                this.triggered = { min50: false, min40: false, min30: false, min20: false, min10: false, min2: false, min15s: false };
+                this.lastIntTime = -1;
+                Sound.stopTension();
+            },
+
+            playAlarm() {
+                if (!Sound.ctx) return;
+
+                // Tense, dissonant alarm (Dual Oscillator)
+                const t = Sound.ctx.currentTime;
+                const osc1 = Sound.ctx.createOscillator();
+                const osc2 = Sound.ctx.createOscillator();
+                const gain = Sound.ctx.createGain();
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(Sound.ctx.destination);
+
+                osc1.type = 'sawtooth';
+                osc2.type = 'square';
+
+                // Dissonant interval (Tritone-ish) falling rapidly
+                osc1.frequency.setValueAtTime(1000, t);
+                osc1.frequency.exponentialRampToValueAtTime(500, t + 0.3);
+
+                osc2.frequency.setValueAtTime(700, t); // ~F#5 against C6
+                osc2.frequency.exponentialRampToValueAtTime(350, t + 0.3);
+
+                gain.gain.setValueAtTime(0.3, t);
+                gain.gain.linearRampToValueAtTime(0, t + 0.35);
+
+                osc1.start();
+                osc2.start();
+                osc1.stop(t + 0.4);
+                osc2.stop(t + 0.4);
+            },
+
+            speak(text, rate = 1.2, pitch = 1.0, volume = 1.0) {
+                if ('speechSynthesis' in window) {
+                    // window.speechSynthesis.cancel(); // DO NOT CANCEL: Allow queueing so 10 and 1 aren't cut off
+                    const u = new SpeechSynthesisUtterance(text);
+                    u.lang = 'zh-TW';
+                    u.rate = rate;
+                    u.pitch = pitch;
+                    u.volume = volume;
+                    window.speechSynthesis.speak(u);
+                }
+            },
+
+            trigger(text) {
+                this.playAlarm();
+                setTimeout(() => this.speak(text), 400); // Shorter delay
+            },
+
+            check(timeLeft) {
+                // 50 Mins
+                if (GAME_DURATION_SEC > 3000 && timeLeft <= 3000 && timeLeft > 2990 && !this.triggered.min50) {
+                    this.triggered.min50 = true;
+                    this.trigger("還有50分鐘");
+                }
+                // 40 Mins
+                if (GAME_DURATION_SEC > 2400 && timeLeft <= 2400 && timeLeft > 2390 && !this.triggered.min40) {
+                    this.triggered.min40 = true;
+                    this.trigger("還有40分鐘");
+                }
+                // 30 Mins
+                if (GAME_DURATION_SEC > 1800 && timeLeft <= 1800 && timeLeft > 1790 && !this.triggered.min30) {
+                    this.triggered.min30 = true;
+                    this.trigger("還有30分鐘");
+                }
+
+                // 2 Mins (120s) - ENDGAME TENSION
+                if (timeLeft <= 120 && timeLeft > 110 && !this.triggered.min2) {
+                    this.triggered.min2 = true;
+                    this.trigger("最後2分鐘，全面警戒");
+                    Sound.startEndgameTension();
+                }
+
+                // 20 Mins (1200s) - Only trigger if game is longer than 20 mins
+                if (GAME_DURATION_SEC > 1200 && timeLeft <= 1200 && timeLeft > 1190 && !this.triggered.min20) {
+                    this.triggered.min20 = true;
+                    this.trigger("還有20分鐘");
+                }
+                // 10 Mins (600s)
+                if (timeLeft <= 600 && timeLeft > 590 && !this.triggered.min10) {
+                    this.triggered.min10 = true;
+                    this.trigger("還有10分鐘");
+                }
+
+                // 15s Countdown Warning (Shifted earlier to prevent overlap with 10)
+                // Trigger between 18s and 15s to give buffer
+                if (timeLeft <= 18 && timeLeft > 15 && !this.triggered.min15s) {
+                    this.triggered.min15s = true;
+                    this.speak("倒數十秒", 1.0); // Clear, normal speed
+                }
+
+                // Final 10s Countdown
+                // Revert to Math.floor for Visual Sync (10.9s -> "10" matches UI 10)
+                if (timeLeft <= 11.5 && timeLeft > 0) {
+                    const intTime = Math.floor(timeLeft);
+                    // Constraint: Only speak if <= 10 (Fixes "11" issue)
+                    if (intTime <= 10 && intTime > 0 && intTime !== this.lastIntTime) {
+                        this.lastIntTime = intTime;
+                        // Speak number directly - Slightly faster (1.1) to keep up but clear
+                        this.speak(intTime.toString(), 1.1, 1.0, 1.0);
+
+                        // Ticking sound for countdown
+                        if (intTime <= 5) {
+                            // Extra urgency for last 5
+                            Sound.playTone(800 + (5 - intTime) * 100, 'square', 0.1, 0.1);
+                        }
+                    }
+                }
+            }
+        };
+
+
+        // Generates Video Zombie with Transparent Background Effect
+        function createVideoZombie(id, scale, offsetX, opacity, blur, delayClass) {
+            return `
+             <div id="zombie-${id}" 
+                  class="absolute transition-all duration-300 ease-linear ${delayClass}"
+                  style="bottom: -45%; left: 50%; opacity: ${opacity}; 
+                         width: 300px; height: auto;
+                         transform-origin: bottom center;
+                         transform: translateX(-50%) translate(${offsetX}px, 0) scale(${scale}); 
+                         z-index: ${Math.floor(scale * 100)};
+                         pointer-events: none;
+                         user-select: none;
+                         background-color: transparent;">
+                
+                <video 
+                    autoplay 
+                    loop 
+                    muted 
+                    playsinline 
+                    src="data:video/mp4;base64,${ZOMBIE_VIDEO_SRC}"
+                    style="width: 100%; height: auto; mix-blend-mode: multiply; filter: grayscale(100%) sepia(100%) hue-rotate(50deg) brightness(0.9) contrast(1.2); opacity: 0.9;"
+                ></video>
+             </div>`;
+        }
+
+        // Initialize Horde (Procedural Generation)
+        const ZOMBIE_COUNT = 15;
+        const zombies = Array.from({ length: ZOMBIE_COUNT }, (_, i) => {
+            // Randomize spread: Wide distribution, converging to center
+            // Some from far left (-300), some far right (300)
+            const side = i % 2 === 0 ? 1 : -1;
+            const variance = Math.random() * 100;
+            const baseOffset = (side * 150) + (side * variance) + (Math.random() * 50 - 25);
+
+            return {
+                id: i + 1,
+                baseOffset: baseOffset,
+                speed: 0.7 + Math.random() * 0.6, // varied speeds
+                entryThreshold: i * (90 / ZOMBIE_COUNT) // Spread over 0-90% infection
+            };
+        });
+
+        // Render initial hidden zombies
+        els.zombieLayer.innerHTML = zombies.map((z, i) => createVideoZombie(z.id, 0.1, z.baseOffset, 0, 5, `zombie-anim-${(i % 3) + 1}`)).join('');
+
+        // --- AUDIO SYSTEM ---
+        const Sound = {
+            ctx: null,
+            droneNode: null,
+            tensionNodes: [],
+            init: () => {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                Sound.ctx = new AudioContext();
+            },
+            playTone: (freq, type, duration, vol = 0.1) => {
+                if (!Sound.ctx) return;
+                const osc = Sound.ctx.createOscillator();
+                const gain = Sound.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, Sound.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, Sound.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, Sound.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(Sound.ctx.destination);
+                osc.start();
+                osc.stop(Sound.ctx.currentTime + duration);
+            },
+            startDrone: () => {
+                if (!Sound.ctx) return;
+                // Create a dark ambient drone
+                const osc1 = Sound.ctx.createOscillator();
+                const osc2 = Sound.ctx.createOscillator();
+                const gain = Sound.ctx.createGain();
+                const filter = Sound.ctx.createBiquadFilter();
+
+                osc1.type = 'sawtooth';
+                osc1.frequency.value = 55; // Low A
+
+                osc2.type = 'sine';
+                osc2.frequency.value = 58; // Detuned slightly for beating
+
+                filter.type = 'lowpass';
+                filter.frequency.value = 180;
+
+                gain.gain.value = 0.1;
+
+                osc1.connect(filter);
+                osc2.connect(filter);
+                filter.connect(gain);
+                gain.connect(Sound.ctx.destination);
+
+                osc1.start();
+                osc2.start();
+
+                Sound.droneNode = gain; // Store to stop later if needed
+            },
+            playGroan: () => {
+                if (!Sound.ctx) return;
+                // Synthesis of a zombie groan/breath
+                const osc = Sound.ctx.createOscillator();
+                const gain = Sound.ctx.createGain();
+                const filter = Sound.ctx.createBiquadFilter();
+
+                // Random low pitch
+                const freq = 60 + Math.random() * 50;
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq, Sound.ctx.currentTime);
+                // Pitch drop
+                osc.frequency.exponentialRampToValueAtTime(freq * 0.8, Sound.ctx.currentTime + 1.5);
+
+                // Vocal formant filter
+                filter.type = 'bandpass';
+                filter.Q.value = 1;
+                filter.frequency.setValueAtTime(300, Sound.ctx.currentTime);
+                filter.frequency.linearRampToValueAtTime(200, Sound.ctx.currentTime + 1.5);
+
+                gain.gain.setValueAtTime(0, Sound.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.2, Sound.ctx.currentTime + 0.5); // Fade in
+                gain.gain.linearRampToValueAtTime(0, Sound.ctx.currentTime + 2.0); // Fade out
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(Sound.ctx.destination);
+
+                osc.start();
+                osc.stop(Sound.ctx.currentTime + 2.5);
+            },
+            playRoar: () => {
+                if (!Sound.ctx) return;
+                // Deeper, more aggressive monster roar
+                const osc = Sound.ctx.createOscillator();
+                const gain = Sound.ctx.createGain();
+                const filter = Sound.ctx.createBiquadFilter();
+
+                // Low Sawtooth
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(80, Sound.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(30, Sound.ctx.currentTime + 2.0); // Pitch Drop
+
+                // Roughness (LFO effect simulated by just rapid filter movement)
+                filter.type = 'lowpass';
+                filter.Q.value = 5;
+                filter.frequency.setValueAtTime(400, Sound.ctx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(100, Sound.ctx.currentTime + 2.0);
+
+                gain.gain.setValueAtTime(0, Sound.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.4, Sound.ctx.currentTime + 0.2); // Fast attack
+                gain.gain.linearRampToValueAtTime(0, Sound.ctx.currentTime + 2.5);   // Long decay
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(Sound.ctx.destination);
+
+                osc.start();
+                osc.stop(Sound.ctx.currentTime + 3.0);
+            },
+            click: () => Sound.playTone(800, 'square', 0.1, 0.1),
+            inject: () => {
+                if (!Sound.ctx) return;
+                // Rising "relief" sound
+                const osc = Sound.ctx.createOscillator();
+                const gain = Sound.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, Sound.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(800, Sound.ctx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.2, Sound.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, Sound.ctx.currentTime + 0.5);
+                osc.connect(gain);
+                gain.connect(Sound.ctx.destination);
+                osc.start();
+                osc.stop(Sound.ctx.currentTime + 0.5);
+            },
+            alarm: () => Sound.playTone(150, 'sawtooth', 0.5, 0.2), // Low scary tick
+            scream: () => {
+                if (!Sound.ctx) return;
+                // Chaotic noise/scream simulation
+                const osc1 = Sound.ctx.createOscillator();
+                const osc2 = Sound.ctx.createOscillator();
+                const gain = Sound.ctx.createGain();
+
+                osc1.type = 'sawtooth';
+                osc2.type = 'square';
+
+                osc1.frequency.setValueAtTime(800, Sound.ctx.currentTime);
+                osc1.frequency.exponentialRampToValueAtTime(100, Sound.ctx.currentTime + 2);
+
+                osc2.frequency.setValueAtTime(1200, Sound.ctx.currentTime);
+                osc2.frequency.exponentialRampToValueAtTime(50, Sound.ctx.currentTime + 2.1);
+
+                gain.gain.setValueAtTime(0.5, Sound.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, Sound.ctx.currentTime + 2);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(Sound.ctx.destination);
+
+                osc1.start();
+                osc2.start();
+                osc1.stop(Sound.ctx.currentTime + 2.5);
+                osc2.stop(Sound.ctx.currentTime + 2.5);
+            },
+
+            startEndgameTension: () => {
+                if (!Sound.ctx) return;
+                // Siren / Fast Heartbeat
+                const osc = Sound.ctx.createOscillator();
+                const lfo = Sound.ctx.createOscillator();
+                const gain = Sound.ctx.createGain();
+                const lfoGain = Sound.ctx.createGain();
+
+                osc.type = 'sawtooth'; // Harsh
+                osc.frequency.value = 400; // Base
+
+                lfo.type = 'square';
+                lfo.frequency.value = 2; // 2Hz Pulse (Alert)
+
+                lfo.connect(lfoGain);
+                lfoGain.gain.value = 100; // +/- 100Hz
+                lfoGain.connect(osc.frequency);
+
+                osc.connect(gain);
+                gain.gain.value = 0.1;
+
+                gain.connect(Sound.ctx.destination);
+
+                osc.start();
+                lfo.start();
+
+                Sound.tensionNodes.push(osc, lfo, gain, lfoGain);
+            },
+
+            stopTension: () => {
+                Sound.tensionNodes.forEach(node => {
+                    if (node.stop) node.stop();
+                    if (node.disconnect) node.disconnect();
+                });
+                Sound.tensionNodes = [];
+            },
+            playFlatline: () => {
+                if (!Sound.ctx) return;
+                // Continuous high pitch "Flatline" sound
+                const osc = Sound.ctx.createOscillator();
+                const gain = Sound.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, Sound.ctx.currentTime); // High beep
+
+                gain.gain.setValueAtTime(0.5, Sound.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.5, Sound.ctx.currentTime + 3.0);
+                gain.gain.linearRampToValueAtTime(0, Sound.ctx.currentTime + 4.0);
+
+                osc.connect(gain);
+                gain.connect(Sound.ctx.destination);
+
+                osc.start();
+                osc.stop(Sound.ctx.currentTime + 4.0);
+            }
+        };
+
+        // --- TIME FORMATTER ---
+        function formatTime(seconds) {
+            const m = Math.floor(Math.max(0, seconds) / 60);
+            const s = Math.floor(Math.max(0, seconds) % 60);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // --- GAME LOGIC ---
+
+        function startGame(durationMins) {
+            if (state.isRunning) return;
+
+            GAME_DURATION_SEC = durationMins * 60;
+
+            GAME_DURATION_SEC = durationMins * 60;
+
+            // Calculate dynamic infection rate: Reach 100% in 90% of duration if unchecked
+            const totalTicks = GAME_DURATION_SEC * 10;
+            state.infectionRate = (100 / totalTicks) * 1.1;
+
+            // Audio Context must start on user interaction
+            Sound.init();
+            VoiceAlerts.reset();
+            VoiceAlerts.trigger("啟動生存協議，活動時間" + durationMins + "分鐘");
+            Sound.startDrone(); // Start background noise
+
+            // CHECK FOR FAST MODE
+            const urlParams = new URLSearchParams(window.location.search);
+            const isFast = urlParams.has('fast');
+            // FIX: If duration is very short (e.g. 0.5 mins for test), DO NOT apply speed multiplier
+            // Otherwise it ends in 0.5 seconds.
+            const SPEED_MULT = (isFast && durationMins >= 5) ? 60 : 1;
+
+            if (isFast) {
+                const debugMsg = document.createElement('div');
+                debugMsg.innerText = ">> FAST FORWARD MODE ACTIVATED (60x) <<";
+                debugMsg.className = "absolute top-2 right-2 text-red-500 font-bold text-xs animate-pulse bg-black/50 px-2";
+                els.mainUi.appendChild(debugMsg);
+            }
+
+            // Request Camera early (soft fail)
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                .then(stream => {
+                    els.cameraVideo.srcObject = stream;
+                    // Don't show yet, just have it ready
+                })
+                .catch(err => console.warn("Camera denied or unavailable", err));
+
+            els.startScreen.classList.add('hidden');
+            els.mainUi.classList.remove('hidden');
+
+            // FULL STATE RESET
+            state.isRunning = true;
+            state.timeLeft = GAME_DURATION_SEC;
+            state.infection = 0;
+            state.tasksDone = [false, false];
+
+            // RESET BUTTONS
+            if (initialBtnStates.btn1) {
+                els.btnTask1.innerHTML = initialBtnStates.btn1;
+                els.btnTask1.classList.remove('btn-disabled');
+            }
+            if (initialBtnStates.btn2) {
+                els.btnTask2.innerHTML = initialBtnStates.btn2;
+                els.btnTask2.classList.remove('btn-disabled');
+            }
+
+            // Reset UI
+            els.timer.innerText = formatTime(state.timeLeft);
+
+            // Initial Click Sound
+            Sound.click();
+
+            // Loop
+            if (gameInterval) clearInterval(gameInterval);
+            gameInterval = setInterval(() => gameLoop(SPEED_MULT), 100);
+        }
+
+        function gameLoop(speedMult = 1) {
+            if (!state.isRunning) return;
+
+            // 1. Time Updates (every 100ms)
+            // We decrement time by 0.1s * multiplier
+            state.timeLeft -= 0.1 * speedMult;
+
+            // 2. Infection Updates
+            state.infection += state.infectionRate * speedMult;
+
+            // 3. Update Visuals
+            updateUI();
+            VoiceAlerts.check(state.timeLeft);
+
+            // 4. Random Zombie Groans
+            // Chance increases with infection. 
+            // In fast mode, meaningful events happen faster, so we might want groans to be responsive
+            // 4. Random Zombie Groans / Monster Roars
+            // Chance increases with infection AND time elapsed
+            const timeProgress = 1 - (state.timeLeft / GAME_DURATION_SEC); // 0 start -> 1 end
+
+            // Base chance + Infection factor + Time factor
+            let baseChance = 0.005;
+            let infectionFactor = (state.infection / 100) * 0.02;
+            let timeFactor = timeProgress * 0.02;
+
+            // Critical Zone Boost (Last 2 mins)
+            if (state.timeLeft <= 120) {
+                timeFactor *= 5; // Much higher chance in final countdown
+            }
+
+            const totalChance = baseChance + infectionFactor + timeFactor;
+
+            if (Math.random() < totalChance) {
+                // Determine type: Roar (scarier) is rarer, but becomes common at end
+                const roarThreshold = 0.2 + (timeProgress * 0.5); // 20% -> 70% chance to be a roar as time goes on
+
+                if (Math.random() < roarThreshold) {
+                    Sound.playRoar();
+                } else {
+                    Sound.playGroan();
+                }
+            }
+
+            // 5. Check Conditions
+            if (state.infection >= 100) {
+                gameOver("已被感染");
+            } else if (state.timeLeft <= 0) {
+                gameOver("時間耗盡");
+            }
+        }
+
+        function updateUI() {
+            // Timer
+            const m = Math.floor(Math.max(0, state.timeLeft) / 60);
+            const s = Math.floor(Math.max(0, state.timeLeft) % 60);
+            els.timer.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+            // Time Bar
+            const timePct = (state.timeLeft / GAME_DURATION_SEC) * 100;
+            if (els.timeBar) els.timeBar.style.width = `${timePct}%`;
+
+            // Infection Meter
+            let infDisplay = Math.min(100, Math.max(0, state.infection));
+            els.infectionBar.style.width = `${infDisplay}%`;
+            els.infectionText.innerText = `${Math.floor(infDisplay)}%`;
+
+            // Color changes based on infection
+            if (infDisplay < 50) {
+                els.infectionBar.className = "h-full bg-green-600 progress-bar-fill";
+            } else if (infDisplay < 80) {
+                els.infectionBar.className = "h-full bg-yellow-500 progress-bar-fill";
+            } else {
+                els.infectionBar.className = "h-full bg-red-600 progress-bar-fill";
+            }
+
+
+
+            // Zombie Approach Visuals (Horde Logic)
+            // Scale and opacity increase as infection rises.
+            // Zombies appear at different thresholds.
+
+            zombies.forEach((z, i) => {
+                const zEl = document.getElementById(`zombie-${z.id}`);
+                if (!zEl) return;
+
+                // Staggered entry from object
+                const entryThreshold = z.entryThreshold;
+
+                if (infDisplay < entryThreshold) {
+                    // Make them very faint shadows before they "enter" properly? No, stick to 0 for surprise
+                    zEl.style.opacity = '0';
+                    return;
+                }
+
+                // Calculate progress for THIS specific zombie
+                const range = 40;
+                let progress = (infDisplay - entryThreshold) / range;
+                if (progress > 1) progress = 1;
+
+                // Scale: 0.5 -> 1.5
+                const scale = 0.5 + (progress * 1.6 * z.speed);
+
+                // Opacity logic
+                let baseOpacity = 0;
+                if (z.id === 1 && infDisplay > 0) baseOpacity = 0.1;
+                if (z.id === 1 && progress <= 0) baseOpacity = 0.15;
+
+                const opacity = Math.min(1, baseOpacity + (progress * 3));
+
+                // Blur: 10px -> 0px
+                const blur = Math.max(0, 10 - (progress * 10));
+
+                zEl.style.opacity = opacity;
+                zEl.style.width = `${300 * scale}px`;
+                zEl.style.height = `${400 * scale}px`;
+
+                // Position Logic: Move from baseOffset to 0 (Center)
+                const startPos = z.baseOffset;
+                const finalPos = startPos * (1 - progress); // Converge to 0
+
+                // Add slight random wobble
+                const wobble = Math.sin(Date.now() / 1000 + z.id) * 10 * (1 - progress);
+
+                // Vertical Adjustment: Move down 30% (approx 120px) as they get closer "Final Position"
+                // They start at bottom: -45%. We want them to end up lower than before.
+                const verticalOffset = progress * 120;
+
+                zEl.style.transform = `translateX(-50%) translate(${finalPos + wobble}px, ${verticalOffset}px) scale(${scale})`;
+
+                // Less blur since they are closer
+                zEl.style.filter = `blur(${Math.max(0, blur - 2)}px) drop-shadow(0 0 10px rgba(0,0,0,0.8))`;
+
+                // Z-Index: Later zombies (higher ID) are on top
+                zEl.style.zIndex = 100 + z.id;
+
+                // Color shift based on infection
+                // Color shift based on infection
+                // Color shift logic for Video (Filter adjustment)
+                const videoEl = zEl.querySelector('video');
+
+                if (infDisplay > 80) {
+                    // Critical: Raging Red Filter
+                    if (videoEl) {
+                        videoEl.style.filter = "grayscale(100%) sepia(100%) hue-rotate(320deg) brightness(0.8) contrast(1.5)"; // Red hue
+                    }
+                    zEl.style.filter = `blur(${Math.max(0, blur - 2)}px) drop-shadow(0 0 15px #f00)`;
+                } else {
+                    // Normal: Green Filter
+                    if (videoEl) {
+                        videoEl.style.filter = "grayscale(100%) sepia(100%) hue-rotate(50deg) brightness(0.9) contrast(1.2)"; // Green hue
+                    }
+                }
+            });
+
+
+            // Visual Stages
+            // 0-10m elapsed (timeLeft 30 -> 20) = Stable
+            // 10-20m elapsed (timeLeft 20 -> 10) = Infected
+            // 20-30m elapsed (timeLeft 10 -> 0) = Critical OR Infection > 80%
+
+            // Visual Stages
+            // Critical: Last 2 mins OR Infection > 80%
+            if (state.timeLeft <= 120 || state.infection >= 80) {
+                setStatus("危急 (CRITICAL)", "text-red-500", "vignette-critical");
+                els.body.classList.add("glitch-active");
+            }
+            // Caution: Infection > 50%
+            else if (state.infection >= 50) {
+                setStatus("警告 (CAUTION)", "text-yellow-400", "vignette-infected");
+                els.body.classList.remove("glitch-active");
+            }
+            // Stable
+            else {
+                setStatus("穩定 (STABLE)", "text-green-400", "vignette-stable");
+                els.body.classList.remove("glitch-active");
+            }
+        }
+
+        function setStatus(text, colorClass, vignetteClass) {
+            els.statusText.innerText = `狀態：${text}`;
+            els.statusText.className = `text-center text-xs mt-1 font-bold tracking-widest ${colorClass}`;
+            els.vignette.className = `absolute inset-0 z-0 pointer-events-none ${vignetteClass}`;
+        }
+
+        function handleTask(taskIndex, btnEl) {
+            if (!state.isRunning) return;
+
+            Sound.inject();
+
+            // Mark Done
+            btnEl.classList.add('btn-disabled');
+            btnEl.innerHTML = `<div class="flex flex-col items-start"><span class="text-sm font-bold tracking-wider text-gray-500">已注射</span></div><span class="text-xs text-green-800">完成</span>`;
+
+            // Subtle flash on zombies when cured
+            zombies.forEach(z => {
+                const zEl = document.getElementById(`zombie-${z.id}`);
+                if (zEl) {
+                    zEl.style.fill = "#0f0";
+                    setTimeout(() => { zEl.style.fill = "black"; }, 200);
+                }
+            });
+
+            // Reduce Infection
+            state.infection = Math.max(0, state.infection - TASK_CURE_AMOUNT);
+            updateUI();
+        }
+
+        function triggerWin() {
+            if (!state.isRunning) return;
+            endGame(true);
+        }
+
+        function gameOver(reason) {
+            endGame(false, reason);
+        }
+
+        function endGame(win, reason) {
+            clearInterval(gameInterval);
+            state.isRunning = false;
+
+            // Stop Audio
+            Sound.stopTension();
+            if (Sound.droneNode) {
+                try { Sound.droneNode.disconnect(); } catch (e) { }
+                Sound.droneNode = null;
+            }
+
+            els.mainUi.classList.add('hidden');
+            els.endScreen.classList.remove('hidden');
+            els.cameraVideo.classList.remove('hidden'); // Show camera underneath
+
+            if (win) {
+                els.endTitle.innerText = "倖存";
+                els.endTitle.className = "text-6xl md:text-8xl font-bold text-green-500 tracking-widest animate-bounce";
+                els.endSubtitle.innerText = "撤離成功";
+                Sound.click(); // Standard beep
+            } else {
+                els.endTitle.innerText = "你已屍變";
+                els.endSubtitle.innerText = `死因：${reason}`;
+
+                // Sound strategy switch: Long Alarm / Flatline instead of voice
+                // This ensures "1" isn't cut off by a new speech command, and is distinct
+                Sound.playFlatline();
+
+                Sound.scream(); // Play chaos sound too
+                Sound.scream();
+                els.body.classList.add("glitch-active");
+
+                // Add slow, low-pitch male voice for Game Over
+                // Rate 0.2 (Very slow), Pitch 0.1 (Deep)
+                setTimeout(() => {
+                    VoiceAlerts.speak("你... 已... 屍... 變...", 0.2, 0.1);
+                }, 500);
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        // els.btnStart.addEventListener('click', startGame); // Replaced by inline buttons
+
+        els.btnTask1.addEventListener('click', (e) => handleTask(0, els.btnTask1));
+        els.btnTask2.addEventListener('click', (e) => handleTask(1, els.btnTask2));
+
+        els.btnTask3.addEventListener('click', () => {
+            // Final task logic is win
+            Sound.inject();
+            setTimeout(triggerWin, 500); // Slight delay for effect
+        });
+
+    </script>
+</body>
+
+</html>
